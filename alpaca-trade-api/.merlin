@@ -1,0 +1,6 @@
+B _build
+PKG lwt
+PKG cohttp
+PKG cohttp-lwt-unix
+PKG yojson
+PKG oUnit
