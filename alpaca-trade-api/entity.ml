@@ -97,195 +97,239 @@ type asset = {
   easy_to_borrow: bool;
 }
 
-let member_to_string json id =
-  member id json |> to_string
+type bar = {
+  t: int;
+  o: float;
+  h: float;
+  l: float;
+  c: float;
+  v: int;
+}
 
-let member_to_int json id =
-  member id json |> to_int
+type clock = {
+  timestamp: string;
+  is_open: bool;
+  next_open: string;
+  next_close: string;
+}
 
-let member_to_bool json id =
-  member id json |> to_bool
+let member_to_string j id =
+  member id j |> to_string
 
-let member_to_int_string json id =
-  member id json |> to_string |> int_of_string
+let member_to_int j id =
+  member id j |> to_int
 
-let member_to_float_string json id =
-  member id json |> to_string |> float_of_string
+let member_to_float j id =
+  member id j |> to_number
 
-let member_to_float_string_option json id =
-  match member id json |> to_string_option with
+let member_to_bool j id =
+  member id j |> to_bool
+
+let member_to_int_string j id =
+  member id j |> to_string |> int_of_string
+
+let member_to_float_string j id =
+  member id j |> to_string |> float_of_string
+
+let member_to_float_string_option j id =
+  match member id j |> to_string_option with
   | Some str -> Some (float_of_string str)
   | None -> None
 
-let member_to_string_option json id =
-  member id json |> to_string_option
+let member_to_string_option j id =
+  member id j |> to_string_option
 
-let account_of_json json = {
+let account_of_json j = {
   id =
-    member_to_string json "id";
+    member_to_string j "id";
   created_at =
-    member_to_string json "created_at";
+    member_to_string j "created_at";
   account_number =
-    member_to_string json "account_number";
+    member_to_string j "account_number";
   status =
-    member_to_string json "status";
+    member_to_string j "status";
   currency =
-    member_to_string json "currency" |> Common.currency_of_string;
+    member_to_string j "currency" |> Common.currency_of_string;
   cash =
-    member_to_float_string json "cash";
+    member_to_float_string j "cash";
   portfolio_value =
-    member_to_float_string json "portfolio_value";
+    member_to_float_string j "portfolio_value";
   pattern_day_trader =
-    member_to_bool json "pattern_day_trader";
+    member_to_bool j "pattern_day_trader";
   trade_suspended_by_user =
-    member_to_bool json "trade_suspended_by_user";
+    member_to_bool j "trade_suspended_by_user";
   trading_blocked =
-    member_to_bool json "trading_blocked";
+    member_to_bool j "trading_blocked";
   transfers_blocked =
-    member_to_bool json "transfers_blocked";
+    member_to_bool j "transfers_blocked";
   account_blocked =
-    member_to_bool json "account_blocked";
+    member_to_bool j "account_blocked";
   shorting_enabled =
-    member_to_bool json "shorting_enabled";
+    member_to_bool j "shorting_enabled";
   long_market_value =
-    member_to_float_string json "long_market_value";
+    member_to_float_string j "long_market_value";
   short_market_value =
-    member_to_float_string json "short_market_value";
+    member_to_float_string j "short_market_value";
   equity =
-    member_to_float_string json "equity";
+    member_to_float_string j "equity";
   last_equity =
-    member_to_float_string json "last_equity";
+    member_to_float_string j "last_equity";
   multiplier =
-    member_to_int_string json "multiplier";
+    member_to_int_string j "multiplier";
   buying_power =
-    member_to_float_string json "buying_power";
+    member_to_float_string j "buying_power";
   initial_margin =
-    member_to_float_string json "initial_margin";
+    member_to_float_string j "initial_margin";
   maintenance_margin =
-    member_to_float_string json "maintenance_margin";
+    member_to_float_string j "maintenance_margin";
   last_maintenance_margin =
-    member_to_float_string json "last_maintenance_margin";
+    member_to_float_string j "last_maintenance_margin";
   sma =
-    member_to_int_string json "sma";
+    member_to_int_string j "sma";
   daytrade_count =
-    member_to_int json "daytrade_count";
+    member_to_int j "daytrade_count";
   daytrading_buying_power =
-    member_to_float_string json "daytrading_buying_power";
+    member_to_float_string j "daytrading_buying_power";
   regt_buying_power =
-    member_to_float_string json "regt_buying_power";
+    member_to_float_string j "regt_buying_power";
 }
 
-let order_of_json json = {
+let order_of_json j = {
   id =
-    member_to_string json "id";
+    member_to_string j "id";
   client_order_id =
-    member_to_string json "client_order_id";
+    member_to_string j "client_order_id";
   created_at =
-    member_to_string json "created_at";
+    member_to_string j "created_at";
   updated_at =
-    member_to_string_option json "updated_at";
+    member_to_string_option j "updated_at";
   submitted_at =
-    member_to_string_option json "submitted_at";
+    member_to_string_option j "submitted_at";
   filled_at =
-    member_to_string_option json "filled_at";
+    member_to_string_option j "filled_at";
   expired_at =
-    member_to_string_option json "expired_at";
+    member_to_string_option j "expired_at";
   cancelled_at =
-    member_to_string_option json "cancelled_at";
+    member_to_string_option j "cancelled_at";
   failed_at =
-    member_to_string_option json "failed_at";
+    member_to_string_option j "failed_at";
   replaced_at =
-    member_to_string_option json "replaced_at";
+    member_to_string_option j "replaced_at";
   replaced_by =
-    member_to_string_option json "replaced_by";
+    member_to_string_option j "replaced_by";
   replaces =
-    member_to_string_option json "replaces";
+    member_to_string_option j "replaces";
   asset_id =
-    member_to_string json "asset_id";
+    member_to_string j "asset_id";
   symbol =
-    member_to_string json "symbol";
+    member_to_string j "symbol";
   asset_class =
-    member_to_string json "asset_class";
+    member_to_string j "asset_class";
   qty =
-    member_to_int_string json "qty";
+    member_to_int_string j "qty";
   filled_qty =
-    member_to_int_string json "filled_qty";
+    member_to_int_string j "filled_qty";
   filled_avg_price =
-    member_to_float_string_option json "filled_avg_price";
+    member_to_float_string_option j "filled_avg_price";
   typ =
-    member_to_string json "type";
+    member_to_string j "type";
   side =
-    member_to_string json "side";
+    member_to_string j "side";
   time_in_force =
-    member_to_string json "time_in_force";
+    member_to_string j "time_in_force";
   limit_price =
-    member_to_float_string_option json "limit_price";
+    member_to_float_string_option j "limit_price";
   stop_price =
-    member_to_float_string_option json "stop_price";
+    member_to_float_string_option j "stop_price";
   status =
-    member_to_string json "status";
+    member_to_string j "status";
   extended_hours =
-    member_to_bool json "extended_hours";
+    member_to_bool j "extended_hours";
   legs =
     []; (*for now*)
 }
 
-let config_of_json json = {
+let config_of_json j = {
   dtbp_check =
-    member_to_string json "dtbp_check";
+    member_to_string j "dtbp_check";
   no_shorting =
-    member_to_bool json "no_shorting";
+    member_to_bool j "no_shorting";
   suspend_trade =
-    member_to_bool json "suspend_trade";
+    member_to_bool j "suspend_trade";
   trade_confirm_email =
-    member_to_string json "trade_confirm_email";
+    member_to_string j "trade_confirm_email";
 }
 
-let position_of_json json = {
+let position_of_json j = {
   asset_id =
-    member_to_string json "asset_id";
+    member_to_string j "asset_id";
   symbol =
-    member_to_string json "symbol";
+    member_to_string j "symbol";
   exchange =
-    member_to_string json "exchange";
+    member_to_string j "exchange";
   asset_class =
-    member_to_string json "asset_class";
+    member_to_string j "asset_class";
   avg_entry_price =
-    member_to_float_string json "avg_entry_price";
+    member_to_float_string j "avg_entry_price";
   qty =
-    member_to_int_string json "qty";
+    member_to_int_string j "qty";
   side =
-    member_to_string json "side";
+    member_to_string j "side";
   market_value =
-    member_to_float_string json "market_value";
+    member_to_float_string j "market_value";
   cost_basis =
-    member_to_float_string json "cost_basis";
+    member_to_float_string j "cost_basis";
   unrealized_pl =
-    member_to_float_string json "unrealized_pl";
+    member_to_float_string j "unrealized_pl";
   unrealized_plpc =
-    member_to_float_string json "unrealized_plpc";
+    member_to_float_string j "unrealized_plpc";
   unrealized_intraday_pl =
-    member_to_float_string json "unrealized_intraday_pl";
+    member_to_float_string j "unrealized_intraday_pl";
   unrealized_intraday_plpc =
-    member_to_float_string json "unrealized_intraday_plpc";
+    member_to_float_string j "unrealized_intraday_plpc";
   current_price =
-    member_to_float_string json "current_price";
+    member_to_float_string j "current_price";
   lastday_price =
-    member_to_float_string json "lastday_price";
+    member_to_float_string j "lastday_price";
   change_today =
-    member_to_float_string json "change_today";
+    member_to_float_string j "change_today";
 }
 
-let asset_of_json json = {
-  id = member_to_string json "id";
-  asset_class = member_to_string json "class";
-  exchange = member_to_string json "exchange";
-  symbol = member_to_string json "symbol";
-  status = member_to_string json "status";
-  tradable = member_to_bool json "tradable";
-  marginable = member_to_bool json "marginable";
-  shortable = member_to_bool json "shortable";
-  easy_to_borrow = member_to_bool json "easy_to_borrow";
+let asset_of_json j = {
+  id =
+    member_to_string j "id";
+  asset_class =
+    member_to_string j "class";
+  exchange =
+    member_to_string j "exchange";
+  symbol =
+    member_to_string j "symbol";
+  status =
+    member_to_string j "status";
+  tradable =
+    member_to_bool j "tradable";
+  marginable =
+    member_to_bool j "marginable";
+  shortable =
+    member_to_bool j "shortable";
+  easy_to_borrow =
+    member_to_bool j "easy_to_borrow";
+}
+
+let bar_of_json j = {
+  t = member_to_int j "t";
+  o = member_to_float j "o";
+  h = member_to_float j "h";
+  l = member_to_float j "l";
+  c = member_to_float j "c";
+  v = member_to_int j "v";
+}
+
+let clock_of_json j = {
+  timestamp = member_to_string j "timestamp";
+  is_open = member_to_bool j "is_open";
+  next_open = member_to_string j "next_open";
+  next_close = member_to_string j "next_close";
 }
 
 let strip_str = function
@@ -387,3 +431,11 @@ let string_of_asset (ass : asset) =
   ^ "\nmarginable: " ^ string_of_bool ass.marginable
   ^ "\nshortable: " ^ string_of_bool ass.shortable
   ^ "\neasy to borrow: " ^ string_of_bool ass.easy_to_borrow
+
+let string_of_bar (bar : bar) =
+  "t: " ^ string_of_int bar.t
+  ^ "\no: " ^ string_of_float bar.o
+  ^ "\nh: " ^ string_of_float bar.h
+  ^ "\nl: " ^ string_of_float bar.l
+  ^ "\nc: " ^ string_of_float bar.c
+  ^ "\nv: " ^ string_of_int bar.v

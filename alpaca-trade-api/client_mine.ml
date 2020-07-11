@@ -42,6 +42,13 @@ module type Rest = sig
   val list_assets : ?status:string ->
     ?asset_class:string -> unit -> Entity.asset list
   val get_asset : string -> Entity.asset
+  val get_bar : 
+    ?limit:int ->
+    ?start:string ->
+    ?endt:string ->
+    ?after:string ->
+    ?until:string -> string list -> string -> (string * Entity.bar list) list
+  val get_clock : unit -> Entity.clock
 
 end
 
@@ -53,6 +60,8 @@ module Make : Starter = functor (E : Environment) -> struct
   exception APIError of string
 
   let base_url = E.base_url ^ "/v2/"
+
+  let data_url = "https://data.alpaca.markets/v1/"
 
   let header = Header.add_list (Header.init_with "allow_redirects" "False")
       [("APCA-API-KEY-ID", E.key_id);
@@ -92,7 +101,8 @@ module Make : Starter = functor (E : Environment) -> struct
     let rsp = Lwt_main.run (get uri) in
     rsp |> from_string |> Entity.config_of_json
 
-  let update_account_config dtbp_check
+  let update_account_config
+      dtbp_check
       no_shorting
       suspend_trade
       trade_confirm_email =
@@ -123,7 +133,8 @@ module Make : Starter = functor (E : Environment) -> struct
     let rsp = Lwt_main.run (get uri) in
     List.map Entity.order_of_json (rsp |> from_string |> json_array)
 
-  let make_body ?symbol:(sym="")
+  let make_body 
+      ?symbol:(sym="")
       ?qty:(q=(-1))
       ?side:(s="")
       ?typ:(t="")
@@ -134,17 +145,35 @@ module Make : Starter = functor (E : Environment) -> struct
       ?client_order_id:(id="")
       () =(*UGLY FIX THSI*)
     let lst =
-      (if sym <> "" then List.cons ("\"symbol\":\"" ^ sym ^ "\"") else Fun.id) [] |>
-      (if q > -1 then List.cons ("\"qty\":\"" ^ string_of_int q ^ "\"") else Fun.id) |>
-      (if s <> "" then List.cons ("\"side\":\"" ^ s ^ "\"") else Fun.id) |>
-      (if t <> "" then List.cons ("\"type\":\"" ^ t ^ "\"") else Fun.id) |>
-      (if tif <> "" then List.cons ("\"time_in_force\":\"" ^ tif ^ "\"") else Fun.id) |>
-      (if lp > -1. then List.cons ("\"limit_price\":\"" ^ string_of_float lp ^ "\"") else Fun.id) |>
-      (if sp > -1. then List.cons ("\"stop_price\":\"" ^ string_of_float sp ^ "\"") else Fun.id) |>
-      (if e then List.cons ("\"extended_hours\":\"true\"") else Fun.id) |>
-      (if id <> "" then List.cons ("\"client_order_id\":\"" ^ id ^ "\"") else Fun.id)
+      (if sym <> "" then
+         List.cons ("\"symbol\":\"" ^ sym ^ "\"")
+       else Fun.id) []
+      |> (if q > -1 then
+            List.cons ("\"qty\":\"" ^ string_of_int q ^ "\"")
+          else Fun.id)
+      |> (if s <> "" then
+            List.cons ("\"side\":\"" ^ s ^ "\"")
+          else Fun.id)
+      |> (if t <> "" then
+            List.cons ("\"type\":\"" ^ t ^ "\"")
+          else Fun.id)
+      |> (if tif <> "" then
+            List.cons ("\"time_in_force\":\"" ^ tif ^ "\"")
+          else Fun.id)
+      |> (if lp > -1. then
+            List.cons ("\"limit_price\":\"" ^ string_of_float lp ^ "\"")
+          else Fun.id)
+      |> (if sp > -1. then
+            List.cons ("\"stop_price\":\"" ^ string_of_float sp ^ "\"")
+          else Fun.id)
+      |> (if e then
+            List.cons ("\"extended_hours\":\"true\"")
+          else Fun.id)
+      |> (if id <> "" then
+            List.cons ("\"client_order_id\":\"" ^ id ^ "\"")
+          else Fun.id)
     in
-    let str = ("{" ^ String.concat "," lst ^ "}") in
+    let str = "{" ^ String.concat "," lst ^ "}" in
     Cohttp_lwt__.Body.of_string str
 
   let submit_order
@@ -215,18 +244,55 @@ module Make : Starter = functor (E : Environment) -> struct
     let rsp = Lwt_main.run (delete uri) in
     rsp
 
-  let list_assets ?status:(s="") ?asset_class:(a="us_equity") () =
+  let list_assets
+      ?status:(s="")
+      ?asset_class:(a="us_equity") () =
     let query = (if s <> "" then ["status=" ^ s] else [])
                 @ ["asset_class=" ^ a] in
     let uri = Uri.of_string (base_url ^ "assets?" ^ params query) in
     let rsp = Lwt_main.run (get uri) in
     List.map Entity.asset_of_json (rsp |> from_string |> json_array)
-  (*USE A HASHTABLE
-    USE A HASHTABLE
-    USE A HASHTABLE *)
+
   let get_asset id =
     let uri = Uri.of_string (base_url ^ "assets/" ^ id) in
     let rsp = Lwt_main.run (get uri) in
     rsp |> from_string |> Entity.asset_of_json
+
+  let parse_bar symbols json =
+    let get_bar symbol =
+      let lst = 
+        [json]
+        |> Util.filter_member symbol
+        |> Util.flatten
+        |> List.map Entity.bar_of_json
+      in
+      (symbol, lst)
+    in
+    List.map get_bar symbols
+
+  let get_bar
+      ?limit:(l=100)
+      ?start:(s="")
+      ?endt:(e="")
+      ?after:(a="") (*difference between start end, after until?*)
+      ?until:(u="")
+      symbols timeframe =
+    let query =
+      (if s <> "" then List.cons ("start=" ^ s) else Fun.id)
+        ["symbols=" ^ String.concat "," symbols; "limit=" ^ string_of_int l]
+      |> (if e <> "" then List.cons ("end=" ^ e) else Fun.id)
+      |> (if a <> "" then List.cons ("after=" ^ a) else Fun.id)
+      |> (if u <> "" then List.cons ("until=" ^ u) else Fun.id)
+    in
+    let uri =
+      Uri.of_string (data_url ^ "bars/" ^ timeframe ^ "?" ^ params query) in
+    let rsp = Lwt_main.run (get uri) in
+    parse_bar symbols (from_string rsp)
+
+  let get_clock () =
+    let uri = Uri.of_string (base_url ^ "clock") in
+    let rsp = Lwt_main.run (get uri) in
+    rsp |> from_string |> Entity.clock_of_json
+
 
 end
