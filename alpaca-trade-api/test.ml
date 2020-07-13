@@ -9,6 +9,8 @@ module TestClient = Client_mine.Make(Env.E)
 
 open TestClient
 
+let _ = close_all_positions ()
+let _ = cancel_all_orders ()
 let acct = get_account ()
 let acct_config = get_account_config ()
 let update_acct_config =
@@ -20,7 +22,7 @@ let update_acct_config =
 let orders = list_orders ()
 let new_order = submit_order ~limit_price:1000. "AAPL" 1 "sell" "limit" "gtc"
 let fetch_order = get_order new_order.id
-let order_by_id = get_order_by_client_order_id "order_for_testing"
+let order_by_id = get_order_by_client_order_id "testing_order"
 let replaced_order = replace_order ~qty:2 new_order.id
 let position_list = list_positions ()
 let aapl = get_asset "AAPL"
@@ -28,7 +30,10 @@ let barset = get_barset ~limit:50 ["AAPL"; "TSLA"] "minute"
 let clock = get_clock ()
 
 let basic = [
-  "update order test" >:: (fun _ -> assert_equal replaced_order.qty 2)
+  "update order test" >::
+  (fun _ -> assert_equal replaced_order.qty 2);
+  "get order by client id" >::
+  (fun _ -> assert_equal order_by_id.client_order_id "testing_order")
 ]
 
 let suite =

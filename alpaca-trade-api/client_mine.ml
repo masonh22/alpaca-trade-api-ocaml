@@ -10,7 +10,6 @@ module type Environment = sig
   (*val api_version : api only support v2 *)
 end
 
-(* these should not be returning abstract types *)
 module type AlpacaInterface = sig
 
   exception APIError of string
@@ -42,7 +41,7 @@ module type AlpacaInterface = sig
   val list_positions : unit -> Entity.position list
   val get_position : string -> Entity.position
   val close_position : string -> Entity.order
-  val close_all_positions : unit -> string
+  val close_all_positions : unit -> unit
   val list_assets :
     ?status:string ->
     ?asset_class:string -> unit -> Entity.asset list
@@ -77,11 +76,12 @@ module Make : Starter = functor (E : Environment) -> struct
   (* HELPERS *)
   let do_rsp (head, body) =
     let code = head |> Response.status |> Code.code_of_status in
-    Printf.printf "Response code: %d\n" code;
-    Printf.printf "Headers:\n%s\n" (head |> Response.headers |> Header.to_string);
+    (*Printf.printf "Response code: %d\n" code;
+      Printf.printf "Headers:\n%s\n" (head |> Response.headers |> Header.to_string);*)
     body |> Cohttp_lwt.Body.to_string >|= fun body ->
     if code > 399 then raise (APIError body) else
-      Printf.printf "Body of length: %d\n" (String.length body); body
+      (*Printf.printf "Body of length: %d\n" (String.length body);*)
+      body
 
   let json_array json = [json] |> Util.flatten
 
@@ -107,6 +107,31 @@ module Make : Starter = functor (E : Environment) -> struct
   let param_format k v = k ^ "=" ^ v
 
   let body_format k v = "\"" ^ k ^ "\":\"" ^ v ^ "\""
+
+  let make_order
+      ?symbol
+      ?side
+      ?typ
+      ?extended_hours:(e=None)
+      qty
+      time_in_force
+      limit_price
+      stop_price
+      client_order_id
+    =
+    let lst = [("symbol", symbol);
+               ("qty", Option.map string_of_int qty);
+               ("side", side);
+               ("type", typ);
+               ("time_in_force", time_in_force);
+               ("limit_price", Option.map string_of_float limit_price);
+               ("stop_price", Option.map string_of_float stop_price);
+               ("extended_hours", Option.map string_of_bool e);
+               ("client_order_id", client_order_id)]
+    in
+    let body = List.fold_left (make_option_list body_format) [] lst in
+    let str = "{" ^ String.concat "," body ^ "}" in
+    Cohttp_lwt__.Body.of_string str
 
   (* FUNCTIONS *)
   let get_account () =
@@ -151,31 +176,6 @@ module Make : Starter = functor (E : Environment) -> struct
     let uri = Uri.of_string (base_url ^ "orders?" ^ params query) in
     let rsp = Lwt_main.run (get uri) in
     List.map Entity.order_of_json (rsp |> from_string |> json_array)
-
-  let make_order
-      ?symbol
-      ?side
-      ?typ
-      ?extended_hours:(e=None)
-      qty
-      time_in_force
-      limit_price
-      stop_price
-      client_order_id
-    =
-    let lst = [("symbol", symbol);
-               ("qty", Option.map string_of_int qty);
-               ("side", side);
-               ("type", typ);
-               ("time_in_force", time_in_force);
-               ("limit_price", Option.map string_of_float limit_price);
-               ("stop_price", Option.map string_of_float stop_price);
-               ("extended_hours", Option.map string_of_bool e);
-               ("client_order_id", client_order_id)]
-    in
-    let body = List.fold_left (make_option_list body_format) [] lst in
-    let str = "{" ^ String.concat "," body ^ "}" in
-    Cohttp_lwt__.Body.of_string str
 
   let submit_order
       ?limit_price
@@ -252,11 +252,9 @@ module Make : Starter = functor (E : Environment) -> struct
     let rsp = Lwt_main.run (delete uri) in
     rsp |> from_string |> Entity.order_of_json
 
-  (*figure out api return body*)
   let close_all_positions () =
     let uri = Uri.of_string (base_url ^ "positions") in
-    let rsp = Lwt_main.run (delete uri) in
-    rsp
+    ignore (Lwt_main.run (delete uri))
 
   let list_assets
       ?status
