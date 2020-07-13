@@ -11,25 +11,29 @@ module type Environment = sig
 end
 
 (* these should not be returning abstract types *)
-module type Rest = sig
+module type AlpacaInterface = sig
 
   exception APIError of string
 
   val get_account : unit -> Entity.account
   val get_account_config : unit -> Entity.config
-  val list_orders : ?status:string ->
+  val update_account_config : string -> bool -> bool -> string -> Entity.config
+  val list_orders :
+    ?status:string ->
     ?limit:int ->
     ?after:string ->
     ?until:string ->
-    ?direction:string -> ?nested:bool -> unit -> Entity.order list
+    ?direction:string -> ?nested:string -> unit -> Entity.order list
   val get_order : string -> Entity.order
   val get_order_by_client_order_id : string -> Entity.order
-  val submit_order : ?limit_price:float ->
+  val submit_order :
+    ?limit_price:float ->
     ?stop_price:float ->
     ?extended_hours:bool ->
     ?client_order_id:string ->
     string -> int -> string -> string -> string -> Entity.order
-  val replace_order : ?qty:int ->
+  val replace_order :
+    ?qty:int ->
     ?time_in_force:string ->
     ?limit_price:float ->
     ?stop_price:float -> ?client_order_id:string -> string -> Entity.order
@@ -39,10 +43,11 @@ module type Rest = sig
   val get_position : string -> Entity.position
   val close_position : string -> Entity.order
   val close_all_positions : unit -> string
-  val list_assets : ?status:string ->
+  val list_assets :
+    ?status:string ->
     ?asset_class:string -> unit -> Entity.asset list
   val get_asset : string -> Entity.asset
-  val get_bar : 
+  val get_barset : 
     ?limit:int ->
     ?start:string ->
     ?endt:string ->
@@ -50,15 +55,17 @@ module type Rest = sig
     ?until:string -> string list -> string -> (string * Entity.bar list) list
   val get_clock : unit -> Entity.clock
 
+
 end
 
 module type Starter =
-  functor (E : Environment) -> Rest
+  functor (E : Environment) -> AlpacaInterface
 
 module Make : Starter = functor (E : Environment) -> struct
 
   exception APIError of string
 
+  (* CONSTANTS *)
   let base_url = E.base_url ^ "/v2/"
 
   let data_url = "https://data.alpaca.markets/v1/"
@@ -67,7 +74,8 @@ module Make : Starter = functor (E : Environment) -> struct
       [("APCA-API-KEY-ID", E.key_id);
        ("APCA-API-SECRET-KEY", E.secret_key)]
 
-  let print_rsp (head, body) =
+  (* HELPERS *)
+  let do_rsp (head, body) =
     let code = head |> Response.status |> Code.code_of_status in
     Printf.printf "Response code: %d\n" code;
     Printf.printf "Headers:\n%s\n" (head |> Response.headers |> Header.to_string);
@@ -80,17 +88,27 @@ module Make : Starter = functor (E : Environment) -> struct
   let params = String.concat "&"
 
   let get uri =
-    Client.get ~headers:header uri >>= print_rsp
+    Client.get ~headers:header uri >>= do_rsp
 
   let post body uri =
-    Client.post ~headers:header ~body:body uri >>= print_rsp
+    Client.post ~headers:header ~body:body uri >>= do_rsp
 
   let patch body uri =
-    Client.patch ~headers:header ~body:body uri >>= print_rsp
+    Client.patch ~headers:header ~body:body uri >>= do_rsp
 
   let delete uri =
-    Client.delete ~headers:header uri >>= print_rsp
+    Client.delete ~headers:header uri >>= do_rsp
 
+  let make_option_list f acc (k, v) =
+    match v with 
+    | Some x -> (f k x) :: acc
+    | _ -> acc
+
+  let param_format k v = k ^ "=" ^ v
+
+  let body_format k v = "\"" ^ k ^ "\":\"" ^ v ^ "\""
+
+  (* FUNCTIONS *)
   let get_account () =
     let uri = Uri.of_string (base_url ^ "account") in
     let rsp = Lwt_main.run (get uri) in
@@ -107,86 +125,77 @@ module Make : Starter = functor (E : Environment) -> struct
       suspend_trade
       trade_confirm_email =
     let uri = Uri.of_string (base_url ^ "account/configurations")
-    and body = Cohttp_lwt__.Body.of_string
-        ("{\"no_shorting\":\"" ^ string_of_bool no_shorting
-         ^ "\",\"suspend_trade\":\"" ^ string_of_bool suspend_trade
-         ^ "\",\"trade_confirm_email\":\"" ^ trade_confirm_email
+    and body =
+      let str = 
+        ("{\"no_shorting\":" ^ string_of_bool no_shorting
+         ^ ",\"suspend_trade\":" ^ string_of_bool suspend_trade
+         ^ ",\"trade_confirm_email\":\"" ^ trade_confirm_email
          ^ "\",\"dtbp_check\":\"" ^ dtbp_check ^ "\"}") in
+      Cohttp_lwt__.Body.of_string str
+    in
     let rsp = Lwt_main.run (patch body uri) in
     rsp |> from_string |> Entity.config_of_json
 
   let list_orders
       ?status:(s="open")
-      ?limit:(l=(0))
-      ?after:(a="")
-      ?until:(u="")
+      ?limit:(l=(50))
+      ?after
+      ?until
       ?direction:(d="desc")
-      ?nested:(n=false)
+      ?nested
       () =
-    let query = (if u <> "" then List.cons ("until=" ^ u) else Fun.id)
-        ["status=" ^ s;
-         "limit=" ^ string_of_int l;
-         "direction=" ^ d;
-         "nested=" ^ string_of_bool n] |>
-                (if a <> "" then List.cons ("after=" ^ a) else Fun.id) in
+    let l1 = ["status=" ^ s; "limit=" ^ string_of_int l; "direction=" ^ d]
+    and l2 = [("after", after); ("until", until); ("nested", nested)]
+    in
+    let query = List.fold_left (make_option_list param_format) l1 l2 in
     let uri = Uri.of_string (base_url ^ "orders?" ^ params query) in
     let rsp = Lwt_main.run (get uri) in
     List.map Entity.order_of_json (rsp |> from_string |> json_array)
 
-  let make_body 
-      ?symbol:(sym="")
-      ?qty:(q=(-1))
-      ?side:(s="")
-      ?typ:(t="")
-      ?time_in_force:(tif="")
-      ?limit_price:(lp=(-1.))
-      ?stop_price:(sp=(-1.))
-      ?extended_hours:(e=false)
-      ?client_order_id:(id="")
-      () =(*UGLY FIX THSI*)
-    let lst =
-      (if sym <> "" then
-         List.cons ("\"symbol\":\"" ^ sym ^ "\"")
-       else Fun.id) []
-      |> (if q > -1 then
-            List.cons ("\"qty\":\"" ^ string_of_int q ^ "\"")
-          else Fun.id)
-      |> (if s <> "" then
-            List.cons ("\"side\":\"" ^ s ^ "\"")
-          else Fun.id)
-      |> (if t <> "" then
-            List.cons ("\"type\":\"" ^ t ^ "\"")
-          else Fun.id)
-      |> (if tif <> "" then
-            List.cons ("\"time_in_force\":\"" ^ tif ^ "\"")
-          else Fun.id)
-      |> (if lp > -1. then
-            List.cons ("\"limit_price\":\"" ^ string_of_float lp ^ "\"")
-          else Fun.id)
-      |> (if sp > -1. then
-            List.cons ("\"stop_price\":\"" ^ string_of_float sp ^ "\"")
-          else Fun.id)
-      |> (if e then
-            List.cons ("\"extended_hours\":\"true\"")
-          else Fun.id)
-      |> (if id <> "" then
-            List.cons ("\"client_order_id\":\"" ^ id ^ "\"")
-          else Fun.id)
+  let make_order
+      ?symbol
+      ?side
+      ?typ
+      ?extended_hours:(e=None)
+      qty
+      time_in_force
+      limit_price
+      stop_price
+      client_order_id
+    =
+    let lst = [("symbol", symbol);
+               ("qty", Option.map string_of_int qty);
+               ("side", side);
+               ("type", typ);
+               ("time_in_force", time_in_force);
+               ("limit_price", Option.map string_of_float limit_price);
+               ("stop_price", Option.map string_of_float stop_price);
+               ("extended_hours", Option.map string_of_bool e);
+               ("client_order_id", client_order_id)]
     in
-    let str = "{" ^ String.concat "," lst ^ "}" in
+    let body = List.fold_left (make_option_list body_format) [] lst in
+    let str = "{" ^ String.concat "," body ^ "}" in
     Cohttp_lwt__.Body.of_string str
 
   let submit_order
-      ?limit_price:(lp=(-1.))
-      ?stop_price:(sp=(-1.))
-      ?extended_hours:(e=false)
-      ?client_order_id:(id="")
+      ?limit_price
+      ?stop_price
+      ?extended_hours
+      ?client_order_id
       symbol qty side typ time_in_force =
     let uri = Uri.of_string (base_url ^ "orders")
-    and body = make_body ~symbol:symbol ~qty:qty ~side:side
-        ~typ:typ ~time_in_force:time_in_force (*UGLY FIX THIS*)
-        ~limit_price:lp ~stop_price:sp
-        ~extended_hours:e ~client_order_id:id () in
+    and body =
+      make_order
+        ~symbol:symbol
+        ~side:side
+        ~typ:typ
+        ~extended_hours:extended_hours
+        (Some qty)
+        (Some time_in_force)
+        limit_price
+        stop_price
+        client_order_id
+    in
     let rsp = Lwt_main.run (post body uri) in
     rsp |> from_string |> Entity.order_of_json
 
@@ -202,16 +211,21 @@ module Make : Starter = functor (E : Environment) -> struct
     rsp |> from_string |> Entity.order_of_json
 
   let replace_order
-      ?qty:(q=(-1))
-      ?time_in_force:(tif="")
-      ?limit_price:(lp=(-1.))
-      ?stop_price:(sp=(-1.))
-      ?client_order_id:(c_id="")
+      ?qty
+      ?time_in_force
+      ?limit_price
+      ?stop_price
+      ?client_order_id
       order_id =
     let uri = Uri.of_string (base_url ^ "orders/" ^ order_id)
     and body =
-      make_body ~qty:q ~time_in_force:tif ~limit_price:lp (*UGLY FIX THIS*)
-        ~stop_price:sp ~client_order_id:c_id () in
+      make_order
+        qty
+        time_in_force
+        limit_price
+        stop_price
+        client_order_id
+    in
     let rsp = Lwt_main.run (patch body uri) in
     rsp |> from_string |> Entity.order_of_json
 
@@ -245,10 +259,11 @@ module Make : Starter = functor (E : Environment) -> struct
     rsp
 
   let list_assets
-      ?status:(s="")
+      ?status
       ?asset_class:(a="us_equity") () =
-    let query = (if s <> "" then ["status=" ^ s] else [])
-                @ ["asset_class=" ^ a] in
+    let query =
+      (match status with Some s -> List.cons ("status=" ^ s) | _ -> Fun.id)
+        ["asset_class=" ^ a] in
     let uri = Uri.of_string (base_url ^ "assets?" ^ params query) in
     let rsp = Lwt_main.run (get uri) in
     List.map Entity.asset_of_json (rsp |> from_string |> json_array)
@@ -270,20 +285,23 @@ module Make : Starter = functor (E : Environment) -> struct
     in
     List.map get_bar symbols
 
-  let get_bar
+  (*find out Yojson.Basic.Util.to_assoc*)
+  let get_barset
       ?limit:(l=100)
-      ?start:(s="")
-      ?endt:(e="")
-      ?after:(a="") (*difference between start end, after until?*)
-      ?until:(u="")
-      symbols timeframe =
-    let query =
-      (if s <> "" then List.cons ("start=" ^ s) else Fun.id)
-        ["symbols=" ^ String.concat "," symbols; "limit=" ^ string_of_int l]
-      |> (if e <> "" then List.cons ("end=" ^ e) else Fun.id)
-      |> (if a <> "" then List.cons ("after=" ^ a) else Fun.id)
-      |> (if u <> "" then List.cons ("until=" ^ u) else Fun.id)
+      ?start
+      ?endt
+      ?after (*difference between start end, after until?*)
+      ?until
+      symbols
+      timeframe =
+    let l1 =
+      ["symbols=" ^ String.concat "," symbols; "limit=" ^ string_of_int l]
+    and l2 = [("start", start);
+              ("end", endt);
+              ("after", after);
+              ("until", until)]
     in
+    let query = List.fold_left (make_option_list param_format) l1 l2 in
     let uri =
       Uri.of_string (data_url ^ "bars/" ^ timeframe ^ "?" ^ params query) in
     let rsp = Lwt_main.run (get uri) in

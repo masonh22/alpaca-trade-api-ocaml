@@ -1,12 +1,12 @@
 open Yojson.Basic.Util
-open Fieldslib
+open Common
 
 type account = {
   id: string;
-  created_at: string; (* time type? *)
+  created_at: string;
   account_number: string;
   status: string;
-  currency: Common.currency;
+  currency: Currency.t;
   cash: float;
   portfolio_value: float;
   pattern_day_trader: bool;
@@ -69,7 +69,7 @@ type config = {
 type position = {
   asset_id: string;
   symbol: string;
-  exchange: string;
+  exchange: Exchange.t;
   asset_class: string;
   avg_entry_price: float;
   qty: int;
@@ -88,7 +88,7 @@ type position = {
 type asset = {
   id: string;
   asset_class: string; (*class*)
-  exchange: string; (*make variant*)
+  exchange: Exchange.t;
   symbol: string;
   status: string; (*make variant*)
   tradable: bool;
@@ -149,7 +149,7 @@ let account_of_json j = {
   status =
     member_to_string j "status";
   currency =
-    member_to_string j "currency" |> Common.currency_of_string;
+    member_to_string j "currency" |> Currency.of_string;
   cash =
     member_to_float_string j "cash";
   portfolio_value =
@@ -250,14 +250,10 @@ let order_of_json j = {
 }
 
 let config_of_json j = {
-  dtbp_check =
-    member_to_string j "dtbp_check";
-  no_shorting =
-    member_to_bool j "no_shorting";
-  suspend_trade =
-    member_to_bool j "suspend_trade";
-  trade_confirm_email =
-    member_to_string j "trade_confirm_email";
+  dtbp_check = member_to_string j "dtbp_check";
+  no_shorting = member_to_bool j "no_shorting";
+  suspend_trade = member_to_bool j "suspend_trade";
+  trade_confirm_email = member_to_string j "trade_confirm_email";
 }
 
 let position_of_json j = {
@@ -266,7 +262,7 @@ let position_of_json j = {
   symbol =
     member_to_string j "symbol";
   exchange =
-    member_to_string j "exchange";
+    member_to_string j "exchange" |> Exchange.of_string;
   asset_class =
     member_to_string j "asset_class";
   avg_entry_price =
@@ -296,24 +292,15 @@ let position_of_json j = {
 }
 
 let asset_of_json j = {
-  id =
-    member_to_string j "id";
-  asset_class =
-    member_to_string j "class";
-  exchange =
-    member_to_string j "exchange";
-  symbol =
-    member_to_string j "symbol";
-  status =
-    member_to_string j "status";
-  tradable =
-    member_to_bool j "tradable";
-  marginable =
-    member_to_bool j "marginable";
-  shortable =
-    member_to_bool j "shortable";
-  easy_to_borrow =
-    member_to_bool j "easy_to_borrow";
+  id = member_to_string j "id";
+  asset_class = member_to_string j "class";
+  exchange = member_to_string j "exchange" |> Exchange.of_string;
+  symbol = member_to_string j "symbol";
+  status = member_to_string j "status";
+  tradable = member_to_bool j "tradable";
+  marginable = member_to_bool j "marginable";
+  shortable = member_to_bool j "shortable";
+  easy_to_borrow = member_to_bool j "easy_to_borrow";
 }
 
 let bar_of_json j = {
@@ -345,7 +332,7 @@ let string_of_account (act : account) =
   ^ "\ncreated at: " ^ act.created_at
   ^ "\naccount number: " ^ act.account_number
   ^ "\nstatus: " ^ act.status
-  ^ "\ncurrency: " ^ Common.to_string act.currency
+  ^ "\ncurrency: " ^ Currency.to_string act.currency
   ^ "\ncash: " ^ string_of_float act.cash
   ^ "\nportfolio value: " ^ string_of_float act.portfolio_value
   ^ "\npattern day trader: " ^ string_of_bool act.pattern_day_trader
@@ -405,7 +392,7 @@ let string_of_config (cfg : config) =
 let string_of_position (psn : position) =
   "asset id: " ^ psn.asset_id
   ^ "\nsymbol: " ^ psn.symbol
-  ^ "\nexchange: " ^ psn.exchange
+  ^ "\nexchange: " ^ Exchange.to_string psn.exchange
   ^ "\nasset class: " ^ psn.asset_class
   ^ "\navg entry price: " ^ string_of_float psn.avg_entry_price
   ^ "\nqty: " ^ string_of_int psn.qty
@@ -424,7 +411,7 @@ let string_of_position (psn : position) =
 let string_of_asset (ass : asset) =
   "id: " ^ ass.id
   ^ "\nclass: " ^ ass.asset_class
-  ^ "\nexchange: " ^ ass.exchange
+  ^ "\nexchange: " ^ Exchange.to_string ass.exchange
   ^ "\nsymbol: " ^ ass.symbol
   ^ "\nstatus: " ^ ass.status
   ^ "\ntradable: " ^ string_of_bool ass.tradable

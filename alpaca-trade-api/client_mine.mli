@@ -1,22 +1,25 @@
+(** An [Environment] contains the private keys and URL for an
+    Alpaca account *)
 module type Environment = sig
   val key_id : string
   val secret_key : string
   val base_url : string
-  (*val api_version : api only support v2 *)
 end
 
-module type Rest = sig
+(** [AlpacaInterface] is an interface between OCaml and the Alpaca API *)
+module type AlpacaInterface = sig
 
   exception APIError of string
 
   val get_account : unit -> Entity.account
   val get_account_config : unit -> Entity.config
+  val update_account_config : string -> bool -> bool -> string -> Entity.config
   val list_orders :
     ?status:string ->
     ?limit:int ->
     ?after:string ->
     ?until:string ->
-    ?direction:string -> ?nested:bool -> unit -> Entity.order list
+    ?direction:string -> ?nested:string -> unit -> Entity.order list
   val get_order : string -> Entity.order
   val get_order_by_client_order_id : string -> Entity.order
   val submit_order :
@@ -40,7 +43,7 @@ module type Rest = sig
     ?status:string ->
     ?asset_class:string -> unit -> Entity.asset list
   val get_asset : string -> Entity.asset
-  val get_bar : 
+  val get_barset : 
     ?limit:int ->
     ?start:string ->
     ?endt:string ->
@@ -50,7 +53,8 @@ module type Rest = sig
 
 end
 
+(** A [Starter] is a functor that takes an environment and  *)
 module type Starter =
-  functor (E : Environment) -> Rest
+  functor (E : Environment) -> AlpacaInterface
 
 module Make : Starter

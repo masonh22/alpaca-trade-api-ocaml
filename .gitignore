@@ -7,3 +7,6 @@
 *.native
 *.byte
 _build
+
+env.ml
+alp_test.ml

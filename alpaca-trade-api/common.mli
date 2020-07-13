@@ -1,5 +1,13 @@
-type currency = USD | GBP
 
-val currency_of_string : string -> currency
+module type SignatChangethisname = sig
 
-val to_string : currency -> string
+  type t
+
+  val of_string : string -> t
+  val to_string : t -> string
+
+end
+
+module Currency : SignatChangethisname
+
+module Exchange : SignatChangethisname

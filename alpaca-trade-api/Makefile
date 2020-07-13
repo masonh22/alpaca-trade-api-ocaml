@@ -1,4 +1,4 @@
-MODULES=common entity client_mine alp_test
+MODULES=env common entity client_mine alp_test
 OBJECTS=$(MODULES:=.cmo)
 MLS=$(MODULES:=.ml)
 MLIS=$(MODULES:=.mli)
