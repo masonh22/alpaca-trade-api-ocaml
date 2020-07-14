@@ -1,4 +1,4 @@
-MODULES=env common entity client_mine alp_test
+MODULES=env common entity alpaca alp_test
 OBJECTS=$(MODULES:=.cmo)
 MLS=$(MODULES:=.ml)
 MLIS=$(MODULES:=.mli)
@@ -19,12 +19,12 @@ docs: docs-public docs-private
 	
 docs-public: build
 	mkdir -p doc.public
-	ocamlfind ocamldoc -I _build -package yojson,ANSITerminal \
+	ocamlfind ocamldoc -I _build \
 		-html -stars -d doc.public $(MLIS)
 
 docs-private: build
 	mkdir -p doc.private
-	ocamlfind ocamldoc -I _build -package yojson,ANSITerminal \
+	ocamlfind ocamldoc -I _build \
 		-html -stars -d doc.private \
 		-inv-merge-ml-mli -m A $(MLIS) $(MLS)
 

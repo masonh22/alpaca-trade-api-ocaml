@@ -54,7 +54,6 @@ module type AlpacaInterface = sig
     ?until:string -> string list -> string -> (string * Entity.bar list) list
   val get_clock : unit -> Entity.clock
 
-
 end
 
 module type Starter =
@@ -283,7 +282,6 @@ module Make : Starter = functor (E : Environment) -> struct
     in
     List.map get_bar symbols
 
-  (*find out Yojson.Basic.Util.to_assoc*)
   let get_barset
       ?limit:(l=100)
       ?start
@@ -309,6 +307,5 @@ module Make : Starter = functor (E : Environment) -> struct
     let uri = Uri.of_string (base_url ^ "clock") in
     let rsp = Lwt_main.run (get uri) in
     rsp |> from_string |> Entity.clock_of_json
-
 
 end

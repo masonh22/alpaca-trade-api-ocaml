@@ -3,9 +3,9 @@ open Lwt
 open Cohttp
 open Cohttp_lwt_unix
 open Entity
-open Client_mine
+open Alpaca
 
-module TestClient = Client_mine.Make(Env.E)
+module TestClient = Make(Env.E)
 
 open TestClient
 
