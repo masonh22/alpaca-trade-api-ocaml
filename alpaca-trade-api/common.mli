@@ -1,5 +1,8 @@
 
-module type SignatChangethisname = sig
+exception FailID of string
+
+(** An [Identifier] is a module that constrains strings to a set of values *)
+module type Identifier = sig
 
   type t
 
@@ -8,6 +11,5 @@ module type SignatChangethisname = sig
 
 end
 
-module Currency : SignatChangethisname
-
-module Exchange : SignatChangethisname
+(** [Exchange] represents different exchanges *)
+module Exchange : Identifier

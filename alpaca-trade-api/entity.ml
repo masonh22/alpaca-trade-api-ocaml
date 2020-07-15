@@ -6,7 +6,7 @@ type account = {
   created_at: string;
   account_number: string;
   status: string;
-  currency: Currency.t;
+  currency: string;
   cash: float;
   portfolio_value: float;
   pattern_day_trader: bool;
@@ -149,7 +149,7 @@ let account_of_json j = {
   status =
     member_to_string j "status";
   currency =
-    member_to_string j "currency" |> Currency.of_string;
+    member_to_string j "currency";
   cash =
     member_to_float_string j "cash";
   portfolio_value =
@@ -332,7 +332,7 @@ let string_of_account (act : account) =
   ^ "\ncreated at: " ^ act.created_at
   ^ "\naccount number: " ^ act.account_number
   ^ "\nstatus: " ^ act.status
-  ^ "\ncurrency: " ^ Currency.to_string act.currency
+  ^ "\ncurrency: " ^ act.currency
   ^ "\ncash: " ^ string_of_float act.cash
   ^ "\nportfolio value: " ^ string_of_float act.portfolio_value
   ^ "\npattern day trader: " ^ string_of_bool act.pattern_day_trader

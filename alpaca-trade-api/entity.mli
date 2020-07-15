@@ -7,7 +7,7 @@ type account = {
   created_at: string;
   account_number: string;
   status: string;
-  currency: Common.Currency.t;
+  currency: string;
   cash: float;
   portfolio_value: float;
   pattern_day_trader: bool;

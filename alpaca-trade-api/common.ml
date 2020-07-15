@@ -1,5 +1,7 @@
 
-module type SignatChangethisname = sig
+exception FailID of string
+
+module type Identifier = sig
 
   type t
 
@@ -8,23 +10,7 @@ module type SignatChangethisname = sig
 
 end
 
-module Currency : SignatChangethisname = struct
-
-  type t = USD | GBP
-
-  let of_string s =
-    match String.uppercase_ascii s with
-    | "GBP" -> GBP
-    | "USD" -> USD
-    | _ -> failwith "COME UP WITH AN ERROR FOR THIS"
-
-  let to_string = function
-    | USD -> "USD"
-    | GBP -> "GBP"
-
-end
-
-module Exchange : SignatChangethisname = struct
+module Exchange : Identifier = struct
 
   type t = AMEX | ARCA | BATS | NYSE | NASDAQ | NYSEARCA
 
@@ -36,7 +22,7 @@ module Exchange : SignatChangethisname = struct
     | "NYSE" -> NYSE
     | "NASDAQ" -> NASDAQ
     | "NYSEARCA" -> NYSEARCA
-    | _ -> failwith "COME UP WITH AN ERROR FOR THIS"
+    | _ -> raise (FailID "Invalid Exchange")
 
   let to_string = function
     | AMEX -> "AMEX"
