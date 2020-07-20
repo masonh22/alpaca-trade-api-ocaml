@@ -1,7 +1,8 @@
-open Lwt
+open Async
 open Cohttp
-open Cohttp_lwt_unix
+open Cohttp_async
 open Yojson.Basic
+open Entity
 
 module type Environment = sig
   val key_id : string
@@ -14,45 +15,80 @@ module type AlpacaInterface = sig
 
   exception APIError of string
 
-  val get_account : unit -> Entity.account
-  val get_account_config : unit -> Entity.config
-  val update_account_config : string -> bool -> bool -> string -> Entity.config
+  (** [get_account ()] is the Alpaca account object *)
+  val get_account : unit -> Entity.account Async_kernel__Deferred.t
+
+  (** [get_account_config ()] is the current account configuration *)
+  val get_account_config : unit -> Entity.config Async_kernel__Deferred.t
+
+  (** [update_account_config] updates the account configuration *)
+  val update_account_config : string -> bool -> bool -> string -> Entity.config Async_kernel__Deferred.t
   val list_orders :
     ?status:string ->
     ?limit:int ->
     ?after:string ->
     ?until:string ->
-    ?direction:string -> ?nested:string -> unit -> Entity.order list
-  val get_order : string -> Entity.order
-  val get_order_by_client_order_id : string -> Entity.order
+    ?direction:string -> ?nested:string -> unit -> Entity.order list Async_kernel__Deferred.t
+
+  (** [get_order id] is the order with order id [id] *)
+  val get_order : string -> Entity.order Async_kernel__Deferred.t
+
+  (** [get_order_by_client_id id] is the order with client id [id] *)
+  val get_order_by_client_order_id : string -> Entity.order Async_kernel__Deferred.t
+
+  (** [submit_order] submits an order *)
   val submit_order :
     ?limit_price:float ->
     ?stop_price:float ->
     ?extended_hours:bool ->
     ?client_order_id:string ->
-    string -> int -> string -> string -> string -> Entity.order
+    string -> int -> string -> string -> string -> Entity.order Async_kernel__Deferred.t
+
+  (** [replace_order id] replaces the order with order id [id]
+      with updated parameters *)
   val replace_order :
     ?qty:int ->
     ?time_in_force:string ->
     ?limit_price:float ->
-    ?stop_price:float -> ?client_order_id:string -> string -> Entity.order
-  val cancel_order : string -> unit
-  val cancel_all_orders : unit -> unit
-  val list_positions : unit -> Entity.position list
-  val get_position : string -> Entity.position
-  val close_position : string -> Entity.order
-  val close_all_positions : unit -> unit
+    ?stop_price:float -> ?client_order_id:string -> string -> Entity.order Async_kernel__Deferred.t
+
+  (** [cancel_order id] cancels the order with order id [id] *)
+  val cancel_order : string -> string Async_kernel__Deferred.t
+
+  (** [cancel_all_orders ()] cancells all orders *)
+  val cancel_all_orders : unit -> string Async_kernel__Deferred.t
+
+  (** [list_positions ()] is a list of all open positions *)
+  val list_positions : unit -> Entity.position list Async_kernel__Deferred.t
+
+  (** [get_position symbol] is the current position on [symbol] *)
+  val get_position : string -> Entity.position Async_kernel__Deferred.t
+
+  (** [close_position symbol] attempts to close the position on symbol *)
+  val close_position : string -> Entity.order Async_kernel__Deferred.t
+
+  (** [close_all_positions ()] attempts to close all positions *)
+  val close_all_positions : unit -> string Async_kernel__Deferred.t
+
+  (** [list_assets ()] is a master list of all assets available from Alpaca *)
   val list_assets :
     ?status:string ->
-    ?asset_class:string -> unit -> Entity.asset list
-  val get_asset : string -> Entity.asset
+    ?asset_class:string -> unit -> Entity.asset list Async_kernel__Deferred.t
+
+  (** [get_asset id] is the asset with id or symbol [id] *)
+  val get_asset : string -> Entity.asset Async_kernel__Deferred.t
+
+  (** [get_barset] retrieves a list of bars for each requested symbol
+      in ascending order by time *)
   val get_barset : 
     ?limit:int ->
     ?start:string ->
     ?endt:string ->
     ?after:string ->
-    ?until:string -> string list -> string -> (string * Entity.bar list) list
-  val get_clock : unit -> Entity.clock
+    ?until:string -> string list -> string -> (string * Entity.bar list) list Async_kernel__Deferred.t
+
+  (** [get_clock ()] is a clock object for the current time *)
+  val get_clock : unit -> Entity.clock Async_kernel__Deferred.t
 
 end
 
@@ -77,10 +113,11 @@ module Make : Starter = functor (E : Environment) -> struct
     let code = head |> Response.status |> Code.code_of_status in
     (*Printf.printf "Response code: %d\n" code;
       Printf.printf "Headers:\n%s\n" (head |> Response.headers |> Header.to_string);*)
-    body |> Cohttp_lwt.Body.to_string >|= fun body ->
-    if code > 399 then raise (APIError body) else
-      (*Printf.printf "Body of length: %d\n" (String.length body);*)
-      body
+    body |> Body.to_string >>| fun body ->
+    let b = Base.String.to_string body in
+    if code > 399 then raise (APIError b) else b
+  (*Printf.printf "Body of length: %d\n" (String.length body);*)
+
 
   let json_array json = [json] |> Util.flatten
 
@@ -130,18 +167,18 @@ module Make : Starter = functor (E : Environment) -> struct
     in
     let body = List.fold_left (make_option_list body_format) [] lst in
     let str = "{" ^ String.concat "," body ^ "}" in
-    Cohttp_lwt__.Body.of_string str
+    Body.of_string str
 
   (* FUNCTIONS *)
   let get_account () =
     let uri = Uri.of_string (base_url ^ "account") in
-    let rsp = Lwt_main.run (get uri) in
-    rsp |> from_string |> Entity.account_of_json
+    get uri >>| fun rsp ->
+    rsp |> from_string |> account_of_json
 
   let get_account_config () =
     let uri = Uri.of_string (base_url ^ "account/configurations") in
-    let rsp = Lwt_main.run (get uri) in
-    rsp |> from_string |> Entity.config_of_json
+    get uri >>| fun rsp ->
+    rsp |> from_string |> config_of_json
 
   let update_account_config
       dtbp_check
@@ -155,10 +192,10 @@ module Make : Starter = functor (E : Environment) -> struct
          ^ ",\"suspend_trade\":" ^ string_of_bool suspend_trade
          ^ ",\"trade_confirm_email\":\"" ^ trade_confirm_email
          ^ "\",\"dtbp_check\":\"" ^ dtbp_check ^ "\"}") in
-      Cohttp_lwt__.Body.of_string str
+      Body.of_string str
     in
-    let rsp = Lwt_main.run (patch body uri) in
-    rsp |> from_string |> Entity.config_of_json
+    patch body uri >>| fun rsp ->
+    rsp |> from_string |> config_of_json
 
   let list_orders
       ?status:(s="open")
@@ -173,8 +210,8 @@ module Make : Starter = functor (E : Environment) -> struct
     in
     let query = List.fold_left (make_option_list param_format) l1 l2 in
     let uri = Uri.of_string (base_url ^ "orders?" ^ params query) in
-    let rsp = Lwt_main.run (get uri) in
-    List.map Entity.order_of_json (rsp |> from_string |> json_array)
+    get uri >>| fun rsp ->
+    List.map order_of_json (rsp |> from_string |> json_array)
 
   let submit_order
       ?limit_price
@@ -195,19 +232,19 @@ module Make : Starter = functor (E : Environment) -> struct
         stop_price
         client_order_id
     in
-    let rsp = Lwt_main.run (post body uri) in
-    rsp |> from_string |> Entity.order_of_json
+    post body uri >>| fun rsp ->
+    rsp |> from_string |> order_of_json
 
   let get_order id =
     let uri = Uri.of_string (base_url ^ "orders/" ^ id) in
-    let rsp = Lwt_main.run (get uri) in
-    rsp |> from_string |> Entity.order_of_json
+    get uri >>| fun rsp ->
+    rsp |> from_string |> order_of_json
 
   let get_order_by_client_order_id id =
     let uri = Uri.of_string
         (base_url ^ "orders:by_client_order_id?client_order_id=" ^ id) in
-    let rsp = Lwt_main.run (get uri) in
-    rsp |> from_string |> Entity.order_of_json
+    get uri >>| fun rsp ->
+    rsp |> from_string |> order_of_json
 
   let replace_order
       ?qty
@@ -225,35 +262,35 @@ module Make : Starter = functor (E : Environment) -> struct
         stop_price
         client_order_id
     in
-    let rsp = Lwt_main.run (patch body uri) in
-    rsp |> from_string |> Entity.order_of_json
+    patch body uri >>| fun rsp ->
+    rsp |> from_string |> order_of_json
 
   let cancel_order id =
     let uri = Uri.of_string (base_url ^ "orders/" ^ id) in
-    let _ = Lwt_main.run (delete uri) in ()
+    delete uri (*did return unit*)
 
   let cancel_all_orders () =
     let uri = Uri.of_string (base_url ^ "orders") in
-    let _ = Lwt_main.run (delete uri) in ()
+    delete uri (*did return unit*)
 
   let list_positions () =
     let uri = Uri.of_string (base_url ^ "positions") in
-    let rsp = Lwt_main.run (get uri) in
-    List.map Entity.position_of_json (rsp |> from_string |> json_array)
+    get uri >>| fun rsp ->
+    List.map position_of_json (rsp |> from_string |> json_array)
 
   let get_position symbol = 
     let uri = Uri.of_string (base_url ^ "positions/" ^ symbol) in
-    let rsp = Lwt_main.run (get uri) in
-    rsp |> from_string |> Entity.position_of_json
+    get uri >>| fun rsp ->
+    rsp |> from_string |> position_of_json
 
   let close_position symbol =
     let uri = Uri.of_string (base_url ^ "positions/" ^ symbol) in
-    let rsp = Lwt_main.run (delete uri) in
-    rsp |> from_string |> Entity.order_of_json
+    delete uri >>| fun rsp ->
+    rsp |> from_string |> order_of_json
 
   let close_all_positions () =
     let uri = Uri.of_string (base_url ^ "positions") in
-    ignore (Lwt_main.run (delete uri))
+    delete uri (*did return unit*)
 
   let list_assets
       ?status
@@ -262,13 +299,13 @@ module Make : Starter = functor (E : Environment) -> struct
       (match status with Some s -> List.cons ("status=" ^ s) | _ -> Fun.id)
         ["asset_class=" ^ a] in
     let uri = Uri.of_string (base_url ^ "assets?" ^ params query) in
-    let rsp = Lwt_main.run (get uri) in
-    List.map Entity.asset_of_json (rsp |> from_string |> json_array)
+    get uri >>| fun rsp ->
+    List.map asset_of_json (rsp |> from_string |> json_array)
 
   let get_asset id =
     let uri = Uri.of_string (base_url ^ "assets/" ^ id) in
-    let rsp = Lwt_main.run (get uri) in
-    rsp |> from_string |> Entity.asset_of_json
+    get uri >>| fun rsp ->
+    rsp |> from_string |> asset_of_json
 
   let parse_bar symbols json =
     let get_bar symbol =
@@ -276,7 +313,7 @@ module Make : Starter = functor (E : Environment) -> struct
         [json]
         |> Util.filter_member symbol
         |> Util.flatten
-        |> List.map Entity.bar_of_json
+        |> List.map bar_of_json
       in
       (symbol, lst)
     in
@@ -300,12 +337,12 @@ module Make : Starter = functor (E : Environment) -> struct
     let query = List.fold_left (make_option_list param_format) l1 l2 in
     let uri =
       Uri.of_string (data_url ^ "bars/" ^ timeframe ^ "?" ^ params query) in
-    let rsp = Lwt_main.run (get uri) in
+    get uri >>| fun rsp ->
     parse_bar symbols (from_string rsp)
 
   let get_clock () =
     let uri = Uri.of_string (base_url ^ "clock") in
-    let rsp = Lwt_main.run (get uri) in
-    rsp |> from_string |> Entity.clock_of_json
+    get uri >>| fun rsp ->
+    rsp |> from_string |> clock_of_json
 
 end

@@ -1,6 +1,5 @@
 B _build
-PKG lwt
 PKG cohttp
-PKG cohttp-lwt-unix
+PKG cohttp-async
 PKG yojson
 PKG oUnit

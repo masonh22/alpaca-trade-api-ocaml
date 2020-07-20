@@ -1,7 +1,7 @@
 open OUnit2
-open Lwt
+open Async
 open Cohttp
-open Cohttp_lwt_unix
+open Cohttp_async
 open Entity
 open Alpaca
 
